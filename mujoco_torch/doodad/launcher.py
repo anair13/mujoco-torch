@@ -44,14 +44,14 @@ target_mount = None
 
 def run_experiment(
         method_call,
-        mode='local',
+        mode='local_docker',
         exp_prefix='default',
         seed=None,
         variant=None,
         exp_id=0,
         unique_id=None,
         prepend_date_to_exp_prefix=True,
-        use_gpu=False,
+        use_gpu=True,
         snapshot_mode='last',
         snapshot_gap=1,
         base_log_dir=None,
