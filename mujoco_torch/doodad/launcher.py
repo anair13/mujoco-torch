@@ -528,12 +528,12 @@ def create_log_dir(exp_prefix, exp_id=0, seed=0, base_log_dir=None, variant=None
     :param exp_id: Different exp_ids will be in different directories.
     :return:
     """
-    if variant:
+    if variant and "run_id" in variant and variant["run_id"] is not None:
         run_id, exp_id = variant["run_id"], variant["exp_id"]
         exp_name = "run{}/id{}".format(run_id, exp_id)
     else:
-        exp_name = create_exp_name(exp_prefix, exp_id=exp_id,
-                               seed=seed)
+        exp_name = create_exp_name(exp_prefix, exp_id=exp_id, seed=seed)
+
     if base_log_dir is None:
         base_log_dir = config.LOCAL_LOG_DIR
     log_dir = osp.join(base_log_dir, exp_prefix.replace("_", "-"), exp_name)
