@@ -90,4 +90,5 @@ WORKDIR /root/code
 RUN python -c 'import mujoco_py'
 
 COPY ./vendor/ /root/code/
-RUN pip install -e /root/code/pycuda/
+#RUN DEBIAN_FRONTEND=noninteractive apt-get -qy install libboost-all-dev
+RUN pip install -e /root/code/pycuda2/
