@@ -9,8 +9,13 @@ import uuid
 from collections import namedtuple
 
 import __main__ as main
+import datetime
+import dateutil.tz
 import joblib
+import numpy as np
 
+import mujoco_torch.utils.pythonplusplus as ppp
+from mujoco_torch.utils.logger import logger as default_logger
 from mujoco_torch.launchers import config
 
 GitInfo = namedtuple('GitInfo', ['code_diff', 'commit_hash', 'branch_name'])
@@ -56,6 +61,7 @@ def run_experiment(
         region='us-east-1',
         instance_type=None,
         spot_price=None,
+        logger=default_logger,
         verbose=False,
 ):
     """
@@ -120,6 +126,14 @@ def run_experiment(
         variant = {}
     if base_log_dir is None:
         base_log_dir = config.LOCAL_LOG_DIR
+    for key, value in ppp.recursive_items(variant):
+        # This check isn't really necessary, but it's to prevent myself from
+        # forgetting to pass a variant through dot_map_dict_to_nested_dict.
+        if "." in key:
+            raise Exception(
+                "Variants should not have periods in keys. Did you mean to "
+                "convert {} into a nested dictionary?".format(key)
+            )
     if unique_id is None:
         unique_id = str(uuid.uuid4())
     if prepend_date_to_exp_prefix:
@@ -429,6 +443,9 @@ def run_experiment_here(
         snapshot_gap=1,
         git_info=None,
         script_name=None,
+        base_log_dir=None,
+        log_dir=None,
+        logger=default_logger,
 ):
     """
     Run an experiment locally without any serialization.
@@ -455,6 +472,20 @@ def run_experiment_here(
         variant['seed'] = str(seed)
     reset_execution_environment(logger=logger)
 
+    actual_log_dir = setup_logger(
+        exp_prefix=exp_prefix,
+        variant=variant,
+        exp_id=exp_id,
+        seed=seed,
+        snapshot_mode=snapshot_mode,
+        snapshot_gap=snapshot_gap,
+        base_log_dir=base_log_dir,
+        log_dir=log_dir,
+        git_info=git_info,
+        script_name=script_name,
+        logger=logger,
+    )
+
     set_seed(seed)
 
     run_experiment_here_kwargs = dict(
@@ -469,7 +500,195 @@ def run_experiment_here(
         script_name=script_name,
         base_log_dir=base_log_dir,
     )
+    save_experiment_data(
+        dict(
+            run_experiment_here_kwargs=run_experiment_here_kwargs
+        ),
+        actual_log_dir
+    )
     return experiment_function(variant)
+
+
+def create_exp_name(exp_prefix, exp_id=0, seed=0):
+    """
+    Create a semi-unique experiment name that has a timestamp
+    :param exp_prefix:
+    :param exp_id:
+    :return:
+    """
+    now = datetime.datetime.now(dateutil.tz.tzlocal())
+    timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
+    return "%s_%s_%04d--s-%d" % (exp_prefix, timestamp, exp_id, seed)
+
+
+def create_log_dir(exp_prefix, exp_id=0, seed=0, base_log_dir=None, variant=None):
+    """
+    Creates and returns a unique log directory.
+
+    :param exp_prefix: All experiments with this prefix will have log
+    directories be under this directory.
+    :param exp_id: Different exp_ids will be in different directories.
+    :return:
+    """
+    if variant and "run_id" in variant and variant["run_id"] is not None:
+        run_id, exp_id = variant["run_id"], variant["exp_id"]
+        exp_name = "run{}/id{}".format(run_id, exp_id)
+    else:
+        exp_name = create_exp_name(exp_prefix, exp_id=exp_id,
+                                   seed=seed)
+    if base_log_dir is None:
+        base_log_dir = config.LOCAL_LOG_DIR
+    log_dir = osp.join(base_log_dir, exp_prefix.replace("_", "-"), exp_name)
+    if osp.exists(log_dir):
+        print("WARNING: Log directory already exists {}".format(log_dir))
+    os.makedirs(log_dir, exist_ok=True)
+    return log_dir
+
+
+def setup_logger(
+        exp_prefix="default",
+        exp_id=0,
+        seed=0,
+        variant=None,
+        base_log_dir=None,
+        text_log_file="debug.log",
+        variant_log_file="variant.json",
+        tabular_log_file="progress.csv",
+        snapshot_mode="last",
+        snapshot_gap=1,
+        log_tabular_only=False,
+        log_dir=None,
+        git_info=None,
+        script_name=None,
+        logger=default_logger,
+):
+    """
+    Set up logger to have some reasonable default settings.
+
+    Will save log output to
+
+        based_log_dir/exp_prefix/exp_name.
+
+    exp_name will be auto-generated to be unique.
+
+    If log_dir is specified, then that directory is used as the output dir.
+
+    :param exp_prefix: The sub-directory for this specific experiment.
+    :param exp_id: The number of the specific experiment run within this
+    experiment.
+    :param variant:
+    :param base_log_dir: The directory where all log should be saved.
+    :param text_log_file:
+    :param variant_log_file:
+    :param tabular_log_file:
+    :param snapshot_mode:
+    :param log_tabular_only:
+    :param snapshot_gap:
+    :param log_dir:
+    :param git_info:
+    :param script_name: If set, save the script name to this.
+    :return:
+    """
+    first_time = log_dir is None
+    if first_time:
+        log_dir = create_log_dir(exp_prefix, exp_id=exp_id, seed=seed,
+                                 base_log_dir=base_log_dir, variant=variant)
+
+    if variant is not None:
+        logger.log("Variant:")
+        logger.log(json.dumps(ppp.dict_to_safe_json(variant), indent=2))
+        variant_log_path = osp.join(log_dir, variant_log_file)
+        logger.log_variant(variant_log_path, variant)
+
+    tabular_log_path = osp.join(log_dir, tabular_log_file)
+    text_log_path = osp.join(log_dir, text_log_file)
+
+    logger.add_text_output(text_log_path)
+    if first_time:
+        logger.add_tabular_output(tabular_log_path)
+    else:
+        logger._add_output(tabular_log_path, logger._tabular_outputs,
+                           logger._tabular_fds, mode='a')
+        for tabular_fd in logger._tabular_fds:
+            logger._tabular_header_written.add(tabular_fd)
+    logger.set_snapshot_dir(log_dir)
+    logger.set_snapshot_mode(snapshot_mode)
+    logger.set_snapshot_gap(snapshot_gap)
+    logger.set_log_tabular_only(log_tabular_only)
+    exp_name = log_dir.split("/")[-1]
+    logger.push_prefix("[%s] " % exp_name)
+
+    if git_info is not None:
+        code_diff, commit_hash, branch_name = git_info
+        if code_diff is not None:
+            with open(osp.join(log_dir, "code.diff"), "w") as f:
+                f.write(code_diff)
+        with open(osp.join(log_dir, "git_info.txt"), "w") as f:
+            f.write("git hash: {}".format(commit_hash))
+            f.write('\n')
+            f.write("git branch name: {}".format(branch_name))
+    if script_name is not None:
+        with open(osp.join(log_dir, "script_name.txt"), "w") as f:
+            f.write(script_name)
+    return log_dir
+
+
+def set_seed(seed):
+    """
+    Set the seed for all the possible random number generators.
+
+    :param seed:
+    :return: None
+    """
+    seed = int(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        import tensorflow as tf
+        tf.set_random_seed(seed)
+    except ImportError as e:
+        print("Could not import tensorflow. Skipping tf.set_random_seed")
+
+
+def reset_execution_environment(logger=default_logger):
+    """
+    Call this between calls to separate experiments.
+    :return:
+    """
+    try:
+        import tensorflow as tf
+        tf.reset_default_graph()
+    except ImportError as e:
+        print("Could not import tensorflow. Skipping tf.reset_default_graph")
+    import importlib
+    importlib.reload(logger)
+
+
+def create_run_experiment_multiple_seeds(n_seeds, experiment, **kwargs):
+    """
+    Run a function multiple times over different seeds and return the average
+    score.
+    :param n_seeds: Number of times to run an experiment.
+    :param experiment: A function that returns a score.
+    :param kwargs: keyword arguements to pass to experiment.
+    :return: Average score across `n_seeds`.
+    """
+
+    def run_experiment_with_multiple_seeds(variant):
+        seed = int(variant['seed'])
+        scores = []
+        for i in range(n_seeds):
+            variant['seed'] = str(seed + i)
+            scores.append(run_experiment(
+                experiment,
+                variant=variant,
+                exp_id=i,
+                mode='here',
+                **kwargs
+            ))
+        return np.mean(scores)
+
+    return run_experiment_with_multiple_seeds
 
 
 def query_yes_no(question, default="yes"):

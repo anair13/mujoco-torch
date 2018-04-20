@@ -226,6 +226,11 @@ def run_experiment(
         aws_s3_path = config.AWS_S3_PATH
     else:
         aws_s3_path = None
+    if "run_id" in variant and variant["run_id"] is not None:
+        run_id, exp_id = variant["run_id"], variant["exp_id"]
+        s3_log_name = "run{}/id{}".format(run_id, exp_id)
+    else:
+        s3_log_name = "{}-id{}-s{}".format(exp_prefix, exp_id, seed)
     mode_str_to_doodad_mode = {
         'local': doodad.mode.Local(),
         'local_docker': doodad.mode.LocalDocker(
@@ -239,7 +244,7 @@ def run_experiment(
             instance_type=instance_type,
             spot_price=spot_price,
             s3_log_prefix=exp_prefix,
-            s3_log_name="run{}/id{}".format(variant["run_id"], variant["exp_id"]),
+            s3_log_name=s3_log_name,
             gpu=use_gpu,
             aws_s3_path=aws_s3_path,
             **mode_kwargs

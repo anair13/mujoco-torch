@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Misc
+*.pyc
+*.swp
+*.swo
+*/*/config.py
