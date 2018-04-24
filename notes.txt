@@ -1,3 +1,4 @@
+E = 1
 CPU rendering:
 GPU network:
 render              1.24        0.01        0.02        0.01         100
@@ -9,13 +10,44 @@ render              1.23        0.01        0.02        0.01         100
 forward             0.11        0.00        0.00        0.00         100
 step                0.02        0.00        0.00        0.00         100
 
+
+E = 1
 GPU rendering:
 GPU network:
-step                0.02        0.00        0.00        0.00         100
-forward             0.54        0.01        0.47        0.00         100
+transfer            0.01        0.00        0.00        0.00         100
 render              0.14        0.00        0.08        0.00         100
+step                0.01        0.00        0.00        0.00         100
+forward             0.50        0.00        0.45        0.00         100
 
 CPU network:
-forward             0.07        0.00        0.00        0.00         100
-step                0.02        0.00        0.00        0.00         100
+transfer            0.01        0.00        0.00        0.00         100
 render              0.14        0.00        0.08        0.00         100
+forward             0.05        0.00        0.00        0.00         100
+step                0.01        0.00        0.00        0.00         100
+
+E = 10
+GPU rendering:
+GPU network:
+transfer            0.06        0.00        0.00        0.00         100
+step                0.10        0.00        0.00        0.00         100
+render              0.58        0.01        0.17        0.00         100
+forward             0.51        0.01        0.45        0.00         100
+
+CPU network:
+transfer            0.03        0.00        0.00        0.00         100
+forward             0.16        0.00        0.00        0.00         100
+step                0.10        0.00        0.00        0.00         100
+render              0.60        0.01        0.18        0.00         100
+
+E = 100
+GPU network:
+forward             0.59        0.01        0.45        0.00         100
+step                0.95        0.01        0.01        0.01         100
+render              5.08        0.05        0.89        0.04         100
+transfer            0.46        0.00        0.01        0.00         100
+
+CPU network:
+step                0.92        0.01        0.01        0.01         100
+transfer            0.30        0.00        0.01        0.00         100
+render              5.09        0.05        0.89        0.04         100
+forward             1.32        0.01        0.02        0.01         100
