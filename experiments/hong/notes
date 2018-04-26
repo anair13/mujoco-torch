@@ -1,0 +1,9 @@
+install 
+
+openmpi-bin 
+libopenmpi-dev
+python-mpi4py
+
+pip install
+
+gputil
