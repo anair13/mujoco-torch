@@ -19,6 +19,7 @@ def experiment(variant):
     root = 0
     gpus = GPUtil.getGPUs()
     n_gpu = len(gpus)
+    torch.distributed.init_process_group(backend='mpi', world_size=n_proc)
 
     E = 20
     R = 84
@@ -39,16 +40,15 @@ def experiment(variant):
     if rank == root:
         i_sendcounts = sendcounts*3*R*R
         u_sendcounts = sendcounts*U
-        c = Convnet(6, output_activation=torch.tanh, input_channels=3)
-        if cuda:
-            c.cuda()
+    c = Convnet(6, output_activation=torch.tanh, input_channels=3)
+    c = torch.nn.parallel.DistributedDataParallel(c)
+    if cuda:
+        c.cuda()
 
-    r_imgs = None
-    if rank == 0:
-        r_imgs = np.empty((E,3,R,R), dtype='uint8')
-    r_u = np.empty((len(envs) , U), dtype='float32')
+    # viewer = mujoco_py.MjRenderContextOffscreen(env.sim, device_id=1)
+    # env.sim.add_render_context(viewer)
 
-    def step(stamp=True):
+    def step(i, stamp=True):
         imgs = []
         if i % 100 == 0:
             for e in envs:
@@ -61,6 +61,9 @@ def experiment(variant):
             gt.stamp('render') if stamp else 0
 
         imgs = np.array(imgs)
+        r_imgs = None
+        if rank == 0:
+            r_imgs = np.empty((E,3,R,R), dtype='uint8')
 
         comm.Gatherv(sendbuf=imgs, recvbuf=(r_imgs, i_sendcounts), root=root)
         if rank == 0:
@@ -78,22 +81,23 @@ def experiment(variant):
             torch.cuda.synchronize()
             gt.stamp('forward') if stamp else 0
 
+        r_u = np.empty((len(envs) , U), dtype='float32')
         comm.Scatterv(sendbuf=(u, u_sendcounts), recvbuf=r_u, root=root)
         if rank == 0:
             gt.stamp('comm2') if stamp else 0
-        for j, e in enumerate(envs):
-            e.step(r_u[j, :])
+        for i, e in enumerate(envs):
+            e.step(r_u[i, :])
         comm.Barrier()
         if rank == 0:
             gt.stamp('step') if stamp else 0
 
     for i in range(10):
-        step(False)
+        step(i, False)
 
     if rank == 0:
         gt.stamp('start')
     for i in gt.timed_for(range(100)):
-        step()
+        step(i)
     if rank == 0:
         gt.stamp('end')
 
@@ -103,3 +107,4 @@ if __name__ == "__main__":
     variants = [dict()]
     #run_variants(experiment, variants)
     experiment(variants)
+
