@@ -8,6 +8,8 @@ from gym.envs.mujoco import HalfCheetahEnv
 import gtimer as gt
 import mujoco_py
 
+from torch.nn import functional as F
+
 def from_numpy(*args, **kwargs):
     return torch.from_numpy(*args, **kwargs).float()
 
