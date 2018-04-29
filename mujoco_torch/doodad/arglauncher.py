@@ -10,12 +10,14 @@ import sys
 from multiprocessing import Process, Pool
 import pdb
 
-def run_variants(experiment, variants, run_id=0):
+def run_variants(experiment, vs, run_id=0):
     # preprocess
-    for i, v in enumerate(variants):
+    variants = []
+    for i, v in enumerate(vs):
         v["exp_id"] = i
         v["run_id"] = run_id
         process_variant_cmd(v)
+        variants.append(v)
 
     if "--variants" in sys.argv: # takes either 3-7 or 3,6,7,8,10 as next arg
         i = sys.argv.index("--variants")
@@ -57,7 +59,7 @@ def run_variant(experiment, variant):
         exp_prefix=variant["exp_prefix"],
         exp_id=variant["exp_id"],
         instance_type=variant["instance_type"],
-        # use_gpu=variant["use_gpu"],
+        use_gpu=variant["use_gpu"],
         snapshot_mode=variant["snapshot_mode"],
         snapshot_gap=variant["snapshot_gap"],
         base_log_dir=variant["base_log_dir"],
@@ -89,9 +91,9 @@ def process_variant_cmd(variant):
         variant["sync"] = False
 
     if "--render" in sys.argv:
-        variant["algo_params"]["render"] = True
+        variant["render"] = True
     if "--norender" in sys.argv:
-        variant["algo_params"]["render"] = False
+        variant["render"] = False
 
     if "--ec2" in sys.argv:
         variant["mode"] = "ec2"
@@ -116,9 +118,14 @@ def process_variant_cmd(variant):
     if "--snapshot" in sys.argv:
         variant["snapshot_mode"] = 'gap_and_last'
         variant["snapshot_gap"] = 20
-    else:
-        variant["snapshot_mode"] = 'last'
+    elif "--nosnapshot" in sys.argv:
+        variant["snapshot_mode"] = 'none'
         variant["snapshot_gap"] = 1
+    else:
+        # variant["snapshot_mode"] = 'last'
+        # variant["snapshot_gap"] = 1
+        variant["snapshot_mode"] = 'gap'
+        variant["snapshot_gap"] = 20
 
     if "--gpu_id" in sys.argv:
         i = sys.argv.index("--gpu_id")
@@ -126,9 +133,11 @@ def process_variant_cmd(variant):
         variant["use_gpu"] = True
     if "--gpu" in sys.argv:
         variant["use_gpu"] = True
-        variant["instance_type"] = None
-    if "use_gpu" in variant and variant["use_gpu"] and "gpu_id" not in variant:
-        variant["gpu_id"] = 0
+    if "use_gpu" in variant and variant["use_gpu"]:
+        if "instance_type" not in variant:
+            variant["instance_type"] = "g2.2xlarge"
+        if "gpu_id" not in variant:
+            variant["gpu_id"] = 0
 
     if "--run" in sys.argv:
         i = sys.argv.index("--run")
@@ -141,8 +150,7 @@ def process_variant_cmd(variant):
         variant["exp_prefix"] = sys.argv[0][n:-3]
 
     if "instance_type" not in variant:
-        variant["instance_type"] = "c4.8xlarge"
-        variant["instance_type"] = "g2.2xlarge"
+        variant["instance_type"] = "c4.xlarge"
     if "use_gpu" not in variant:
         variant["use_gpu"] = None
 
@@ -151,4 +159,8 @@ def process_variant_cmd(variant):
     if "--mac" in sys.argv:
         variant["base_log_dir"] = "/Users/ashvin/data/s3doodad/"
 
-    variant["spot_price"] = {'g2.2xlarge': 2.0, 'c4.large': 0.1, 'c4.xlarge': 0.2, 'c4.2xlarge': 0.4, 'm4.large': 0.1, 'm4.xlarge': 0.2, 'm4.2xlarge': 0.4, 'c4.8xlarge': 2.0, 'c4.4xlarge': 1.0}[variant["instance_type"]]
+    variant["spot_price"] = {
+        'c4.large': 0.1, 'c4.xlarge': 0.2, 'c4.2xlarge': 0.4,
+        'm4.large': 0.1, 'm4.xlarge': 0.2, 'm4.2xlarge': 0.4,
+        'c4.8xlarge': 2.0, 'c4.4xlarge': 1.0, 'g2.2xlarge': 0.5,
+    }[variant["instance_type"]]

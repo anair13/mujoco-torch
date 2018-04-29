@@ -1,11 +1,5 @@
 import torch
-import torch.utils.data
-from torch import nn, optim
-from torch.autograd import Variable
-from torch.nn import functional as F
-from torchvision import datasets, transforms
-from torchvision.utils import save_image
-
+from torch import nn
 from mujoco_torch.utils.logger import logger
 import mujoco_torch.utils.pythonplusplus as ppp
 import numpy as np

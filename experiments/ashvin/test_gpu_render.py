@@ -2,9 +2,13 @@ from mujoco_py import load_model_from_xml, MjSim, MjViewer, MjBatchRenderer
 import math
 import os
 
+import torch
+from torch import nn
 from mujoco_torch.doodad.arglauncher import run_variants
 from mujoco_torch.core.networks import Convnet
 from gym.envs.mujoco import HalfCheetahEnv
+from mujoco_torch.core.bridge import MjCudaRender
+import gtimer as gt
 
 def experiment(variant):
     E = 10
@@ -12,6 +16,8 @@ def experiment(variant):
     cuda = True
 
     envs = []
+
+    renderer = MjCudaRender(R, R)
 
 
     for e in range(E):
@@ -30,24 +36,24 @@ def experiment(variant):
             for e in range(E):
                 envs[e].reset()
         for e in range(E):
+            # img = renderer.get_cuda_tensor(envs[e].sim)
             img = envs[e].sim.render(R, R, device_id=1).transpose()
-            imgs.append(img)
         gt.stamp('render') if stamp else 0
 
-        imgs =np.array(imgs)
-        torch_img = np_to_var(imgs)
-        if cuda:
-            torch_img = torch_img.cuda()
-            torch.cuda.synchronize()
-        gt.stamp('transfer') if stamp else 0
+        # imgs =np.array(imgs)
+        # torch_img = np_to_var(imgs)
+        # if cuda:
+        #     torch_img = torch_img.cuda()
+        #     torch.cuda.synchronize()
+        # gt.stamp('transfer') if stamp else 0
 
-        u = get_numpy(c.forward(torch_img).cpu())
-        torch.cuda.synchronize()
-        gt.stamp('forward') if stamp else 0
+        # u = get_numpy(c.forward(torch_img).cpu())
+        # torch.cuda.synchronize()
+        # gt.stamp('forward') if stamp else 0
 
-        for e in range(E):
-            envs[e].step(u[e, :])
-        gt.stamp('step') if stamp else 0
+        # for e in range(E):
+        #     envs[e].step(u[e, :])
+        # gt.stamp('step') if stamp else 0
 
     for i in range(10):
         step(False)
@@ -57,7 +63,7 @@ def experiment(variant):
         step()
     gt.stamp('end')
 
-    print(gt.report(include_itrs=False, format_options=dict(itr_num_width=10)))
+    # print(gt.report(include_itrs=False, format_options=dict(itr_num_width=10)))
 
 if __name__ == "__main__":
     variants = [dict()]
