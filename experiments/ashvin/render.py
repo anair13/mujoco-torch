@@ -29,45 +29,65 @@ def np_to_var(np_array, **kwargs):
 
 def experiment(variant):
     cuda = True
-    ingpu = True
+    ingpu = False
+    R = 84
+    E = 100
+    N = 100
 
     if ingpu:
         from mujoco_torch.core.bridge import MjCudaRender
-        renderer = MjCudaRender(84, 84)
+        renderer = MjCudaRender(84, 84, E)
 
-    R = 84
-    env = HalfCheetahEnv()
+    envs = []
+    for e in range(E):
+        env = HalfCheetahEnv()
+        envs.append(env)
+
     c = Convnet(6, output_activation=torch.tanh, input_channels=3)
     if cuda:
         c.cuda()
 
     def step(stamp=True):
-        env.step(np.random.rand(6))
+        for e in range(E):
+            env = envs[e]
+            env.step(np.random.rand(6))
         gt.stamp('step') if stamp else 0
 
         if ingpu:
-            tensor, img = renderer.get_cuda_tensor(env.sim, False)
+            sims = [env.sim for env in envs]
+            env = envs[e]
+            tensor, img = renderer.get_batch_cuda_tensor(sims, False)
+            tensor = Variable(tensor).float()
             gt.stamp('render') if stamp else 0
 
         else:
-            img = env.sim.render(R, R, device_id=1)
+            imgs = []
+            for e in range(E):
+                env = envs[e]
+                img = env.sim.render(R, R, device_id=1)
+                imgs.append(img)
             gt.stamp('render') if stamp else 0
 
-            x = np_to_var(img)
+            imgs = np.array(imgs)
+            tensor = np_to_var(imgs)
             if cuda:
-                x = x.cuda()
+                tensor = tensor.cuda()
                 torch.cuda.synchronize()
             gt.stamp('transfer') if stamp else 0
+
+        u = get_numpy(c.forward(tensor).cpu())
+        torch.cuda.synchronize()
+        gt.stamp('forward') if stamp else 0
 
         # cv2.imshow("img", img)
         # cv2.waitKey(1)
 
     gt.stamp("start")
-    for i in range(100):
+    for i in range(10):
         step(False)
 
     gt.stamp("warmstart")
-    for i in gt.timed_for(range(1000)):
+    for i in gt.timed_for(range(N)):
         step()
 
     gt.stamp("end")
