@@ -45,14 +45,20 @@ def experiment(variant):
         env.step(np.random.rand(6))
         gt.stamp('step') if stamp else 0
 
-        img = env.sim.render(R, R, device_id=1)
-        gt.stamp('render') if stamp else 0
+        if ingpu:
+            tensor, img = renderer.get_cuda_tensor(env.sim, False)
+            gt.stamp('render') if stamp else 0
 
-        x = np_to_var(img)
-        if cuda:
-            x = x.cuda()
-            torch.cuda.synchronize()
-        gt.stamp('transfer') if stamp else 0
+        else:
+            img = env.sim.render(R, R, device_id=1)
+            gt.stamp('render') if stamp else 0
+
+            x = np_to_var(img)
+            if cuda:
+                x = x.cuda()
+                torch.cuda.synchronize()
+            gt.stamp('transfer') if stamp else 0
+
         # cv2.imshow("img", img)
         # cv2.waitKey(1)
 
